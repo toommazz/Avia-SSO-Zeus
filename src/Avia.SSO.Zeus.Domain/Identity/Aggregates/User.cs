@@ -57,6 +57,27 @@ public sealed class User : AggregateRoot
         return Result.Success(user);
     }
 
+    public static User Reconstitute(
+        Guid id, Guid tenantId, string email,
+        string passwordHash, string passwordSalt,
+        string? twoFactorSecret, TwoFactorMethod twoFactorMethod,
+        UserStatus status, DateTime createdAt)
+    {
+        var userId = UserId.From(id);
+        return new User
+        {
+            Id = id,
+            UserId = userId,
+            TenantId = TenantId.Create(tenantId).Value,
+            Email = Email.Create(email).Value,
+            Password = Password.From(passwordHash, passwordSalt),
+            TwoFactorSecret = twoFactorSecret is not null ? TwoFactorSecret.Create(twoFactorSecret).Value : null,
+            TwoFactorMethod = twoFactorMethod,
+            Status = status,
+            CreatedAt = createdAt
+        };
+    }
+
     public Result ChangePassword(string newPasswordHash, string newPasswordSalt)
     {
         var passwordResult = Password.Create(newPasswordHash, newPasswordSalt);

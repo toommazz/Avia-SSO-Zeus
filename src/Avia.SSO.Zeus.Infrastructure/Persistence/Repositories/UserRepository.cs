@@ -101,10 +101,12 @@ public sealed class UserRepository(IDbConnectionFactory connectionFactory) : IUs
         string? TwoFactorSecret, string TwoFactorMethod,
         string Status, DateTime CreatedAt)
     {
-        public User ToDomain()
-        {
-            var result = User.Register(TenantId, Email, PasswordHash, PasswordSalt);
-            return result.Value;
-        }
+        public User ToDomain() => User.Reconstitute(
+            Id, TenantId, Email,
+            PasswordHash, PasswordSalt,
+            TwoFactorSecret,
+            Enum.Parse<Domain.Identity.Enums.TwoFactorMethod>(TwoFactorMethod),
+            Enum.Parse<Domain.Identity.Enums.UserStatus>(Status),
+            CreatedAt);
     }
 }

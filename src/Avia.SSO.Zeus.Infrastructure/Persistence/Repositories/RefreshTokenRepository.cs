@@ -9,7 +9,7 @@ public sealed class RefreshTokenRepository(IDbConnectionFactory connectionFactor
     public async Task<RefreshToken?> GetByTokenAsync(string token, CancellationToken ct = default)
     {
         const string sql = """
-            SELECT id, token, expires_at, is_revoked, created_at
+            SELECT id, user_id, token, expires_at, is_revoked, created_at
             FROM refresh_tokens
             WHERE token = @Token
             """;
@@ -22,14 +22,15 @@ public sealed class RefreshTokenRepository(IDbConnectionFactory connectionFactor
     public async Task AddAsync(RefreshToken refreshToken, CancellationToken ct = default)
     {
         const string sql = """
-            INSERT INTO refresh_tokens (id, token, expires_at, is_revoked, created_at)
-            VALUES (@Id, @Token, @ExpiresAt, @IsRevoked, @CreatedAt)
+            INSERT INTO refresh_tokens (id, user_id, token, expires_at, is_revoked, created_at)
+            VALUES (@Id, @UserId, @Token, @ExpiresAt, @IsRevoked, @CreatedAt)
             """;
 
         using var conn = connectionFactory.Create();
         await conn.ExecuteAsync(sql, new
         {
             refreshToken.Id,
+            refreshToken.UserId,
             refreshToken.Token,
             refreshToken.ExpiresAt,
             refreshToken.IsRevoked,
@@ -57,8 +58,8 @@ public sealed class RefreshTokenRepository(IDbConnectionFactory connectionFactor
         await conn.ExecuteAsync(sql, new { UserId = userId });
     }
 
-    private sealed record RefreshTokenRow(Guid Id, string Token, DateTime ExpiresAt, bool IsRevoked, DateTime CreatedAt)
+    private sealed record RefreshTokenRow(Guid Id, Guid UserId, string Token, DateTime ExpiresAt, bool IsRevoked, DateTime CreatedAt)
     {
-        public RefreshToken ToDomain() => RefreshToken.Create(Token, ExpiresAt);
+        public RefreshToken ToDomain() => RefreshToken.Create(UserId, Token, ExpiresAt);
     }
 }

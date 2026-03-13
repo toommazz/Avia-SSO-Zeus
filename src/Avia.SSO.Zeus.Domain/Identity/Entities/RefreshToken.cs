@@ -4,6 +4,7 @@ namespace Avia.SSO.Zeus.Domain.Identity.Entities;
 
 public sealed class RefreshToken : Entity
 {
+    public Guid UserId { get; private set; }
     public string Token { get; private set; } = null!;
     public DateTime ExpiresAt { get; private set; }
     public bool IsRevoked { get; private set; }
@@ -11,9 +12,10 @@ public sealed class RefreshToken : Entity
 
     private RefreshToken(Guid id) : base(id) { }
 
-    public static RefreshToken Create(string token, DateTime expiresAt) =>
+    public static RefreshToken Create(Guid userId, string token, DateTime expiresAt) =>
         new(Guid.NewGuid())
         {
+            UserId = userId,
             Token = token,
             ExpiresAt = expiresAt,
             IsRevoked = false,

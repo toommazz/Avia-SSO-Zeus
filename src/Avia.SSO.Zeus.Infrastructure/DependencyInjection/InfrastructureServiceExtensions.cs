@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Avia.SSO.Zeus.Domain.Identity.Repositories;
@@ -18,6 +19,8 @@ public static class InfrastructureServiceExtensions
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        DefaultTypeMap.MatchNamesWithUnderscores = true;
+
         var connectionString = configuration.GetConnectionString("Postgres")
             ?? throw new InvalidOperationException("Connection string 'Postgres' is not configured.");
 

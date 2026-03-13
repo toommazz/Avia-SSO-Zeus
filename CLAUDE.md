@@ -5,6 +5,8 @@
 - C#
 - VSCode
 - PostgreSQL 16 + Dapper
+- MediatR 12 (CQRS)
+- MSTest + Moq (testes)
 
 ## Estrutura
 ```
@@ -14,6 +16,11 @@ sso-zeus-ai/
 ├── SSO-Zeus-AI.slnx
 ├── src/
 │   ├── Avia.SSO.Zeus.Api/
+│   │   ├── Controllers/
+│   │   │   ├── ApiController.cs
+│   │   │   ├── AuthController.cs
+│   │   │   ├── TenantsController.cs
+│   │   │   └── UsersController.cs
 │   │   ├── Properties/
 │   │   │   └── launchSettings.json
 │   │   ├── appsettings.json
@@ -22,7 +29,28 @@ sso-zeus-ai/
 │   │   ├── Avia.SSO.Zeus.Api.http
 │   │   └── Avia.SSO.Zeus.Api.csproj
 │   ├── Avia.SSO.Zeus.Application/
-│   │   ├── Class1.cs
+│   │   ├── Common/
+│   │   │   ├── Behaviors/
+│   │   │   │   └── ValidationBehavior.cs
+│   │   │   └── DTOs/
+│   │   │       ├── AuthTokenDto.cs
+│   │   │       ├── TenantDto.cs
+│   │   │       └── UserDto.cs
+│   │   ├── DependencyInjection/
+│   │   │   └── ApplicationServiceExtensions.cs
+│   │   ├── Identity/
+│   │   │   ├── Commands/
+│   │   │   │   ├── ChangePassword/
+│   │   │   │   ├── EnableTwoFactor/
+│   │   │   │   ├── Login/
+│   │   │   │   ├── RefreshToken/
+│   │   │   │   ├── Register/
+│   │   │   │   └── VerifyTwoFactor/
+│   │   │   └── Queries/
+│   │   │       └── GetUser/
+│   │   ├── Multitenancy/
+│   │   │   └── Commands/
+│   │   │       └── CreateTenant/
 │   │   └── Avia.SSO.Zeus.Application.csproj
 │   ├── Avia.SSO.Zeus.Domain/
 │   │   ├── Common/
@@ -42,17 +70,35 @@ sso-zeus-ai/
 │       └── Avia.SSO.Zeus.Infrastructure.csproj
 └── tests/
     └── Avia.SSO.Zeus.Tests/
+        ├── Application/
+        │   ├── Identity/
+        │   │   ├── LoginCommandHandlerTests.cs
+        │   │   └── RegisterUserCommandHandlerTests.cs
+        │   └── Multitenancy/
+        │       └── CreateTenantCommandHandlerTests.cs
+        ├── Domain/
+        │   ├── Identity/
+        │   │   ├── Aggregates/UserTests.cs
+        │   │   ├── Entities/RefreshTokenTests.cs
+        │   │   └── ValueObjects/
+        │   │       ├── EmailTests.cs
+        │   │       ├── PasswordTests.cs
+        │   │       └── UserIdTests.cs
+        │   ├── Multitenancy/TenantTests.cs
+        │   ├── Session/AuthSessionTests.cs
+        │   └── Shared/ResultTests.cs
+        ├── Infrastructure/
+        │   └── Security/PasswordHasherTests.cs
         ├── MSTestSettings.cs
-        ├── Test1.cs
         └── Avia.SSO.Zeus.Tests.csproj
 ```
 
 ## Projetos
 - **Avia.SSO.Zeus.Api** — ASP.NET Core Web API (.NET 10)
-- **Avia.SSO.Zeus.Application** — Camada de aplicação (use cases / handlers CQRS)
+- **Avia.SSO.Zeus.Application** — Camada de aplicação (use cases / handlers CQRS via MediatR)
 - **Avia.SSO.Zeus.Domain** — Camada de domínio (entidades, interfaces, regras de negócio)
 - **Avia.SSO.Zeus.Infrastructure** — Camada de infraestrutura (persistência, serviços externos, mensageria)
-- **Avia.SSO.Zeus.Tests** — Testes unitários (MSTest)
+- **Avia.SSO.Zeus.Tests** — Testes unitários (MSTest + Moq)
 
 ## Referências entre Projetos
 - **Api** → Application, Infrastructure
@@ -97,85 +143,42 @@ Avia.SSO.Zeus.Domain/
 │   └── Enumeration.cs
 │
 ├── Multitenancy/
-│   ├── Entities/
-│   │   └── Tenant.cs
-│   ├── ValueObjects/
-│   │   ├── TenantId.cs
-│   │   ├── TenantName.cs
-│   │   └── TenantSettings.cs
-│   ├── Events/
-│   │   ├── TenantCreatedEvent.cs
-│   │   └── TenantDeactivatedEvent.cs
-│   ├── Errors/
-│   │   └── TenantErrors.cs
-│   ├── Validators/
-│   │   └── TenantValidator.cs
-│   └── Repositories/
-│       └── ITenantRepository.cs
+│   ├── Entities/Tenant.cs
+│   ├── ValueObjects/TenantId.cs, TenantName.cs, TenantSettings.cs
+│   ├── Events/TenantCreatedEvent.cs, TenantDeactivatedEvent.cs
+│   ├── Errors/TenantErrors.cs
+│   ├── Validators/TenantValidator.cs
+│   └── Repositories/ITenantRepository.cs
 │
 ├── Identity/
-│   ├── Aggregates/
-│   │   └── User.cs                    ← AggregateRoot principal
-│   ├── Entities/
-│   │   ├── RefreshToken.cs
-│   │   ├── TwoFactorToken.cs
-│   │   └── LoginAttempt.cs
-│   ├── ValueObjects/
-│   │   ├── UserId.cs
-│   │   ├── Email.cs
-│   │   ├── Password.cs                ← hash + salt encapsulados
-│   │   ├── PhoneNumber.cs
-│   │   └── TwoFactorSecret.cs
-│   ├── Enums/
-│   │   ├── UserStatus.cs
-│   │   ├── TwoFactorMethod.cs
-│   │   └── LoginFailureReason.cs
-│   ├── Events/
-│   │   ├── UserRegisteredEvent.cs
-│   │   ├── UserLoginSucceededEvent.cs
-│   │   ├── UserLoginFailedEvent.cs
-│   │   ├── UserLockedOutEvent.cs
-│   │   ├── TwoFactorRequestedEvent.cs
-│   │   ├── TwoFactorVerifiedEvent.cs
-│   │   ├── PasswordChangedEvent.cs
-│   │   └── UserDeactivatedEvent.cs
-│   ├── Errors/
-│   │   └── UserErrors.cs
-│   ├── Validators/
-│   │   ├── UserValidator.cs
-│   │   ├── EmailValidator.cs
-│   │   └── PasswordValidator.cs
-│   ├── Repositories/
-│   │   ├── IUserRepository.cs
-│   │   └── IRefreshTokenRepository.cs
-│   └── Services/
-│       ├── IPasswordHasher.cs         ← Interface; implementação na Infrastructure
-│       ├── ITwoFactorService.cs
-│       └── ITokenService.cs
+│   ├── Aggregates/User.cs             ← AggregateRoot principal
+│   ├── Entities/RefreshToken.cs (UserId, Token, ExpiresAt, IsRevoked), TwoFactorToken.cs, LoginAttempt.cs
+│   ├── ValueObjects/UserId.cs, Email.cs, Password.cs, PhoneNumber.cs, TwoFactorSecret.cs
+│   ├── Enums/UserStatus.cs, TwoFactorMethod.cs, LoginFailureReason.cs
+│   ├── Events/UserRegisteredEvent.cs, UserLoginSucceededEvent.cs, UserLoginFailedEvent.cs,
+│   │         UserLockedOutEvent.cs, TwoFactorRequestedEvent.cs, TwoFactorVerifiedEvent.cs,
+│   │         PasswordChangedEvent.cs, UserDeactivatedEvent.cs
+│   ├── Errors/UserErrors.cs
+│   ├── Validators/UserValidator.cs, EmailValidator.cs, PasswordValidator.cs
+│   ├── Repositories/IUserRepository.cs, IRefreshTokenRepository.cs
+│   └── Services/IPasswordHasher.cs, ITwoFactorService.cs, ITokenService.cs
 │
 ├── Session/
-│   ├── Aggregates/
-│   │   └── AuthSession.cs
-│   ├── ValueObjects/
-│   │   ├── SessionId.cs
-│   │   └── DeviceInfo.cs
-│   ├── Events/
-│   │   ├── SessionCreatedEvent.cs
-│   │   └── SessionRevokedEvent.cs
-│   ├── Errors/
-│   │   └── SessionErrors.cs
-│   └── Repositories/
-│       └── IAuthSessionRepository.cs
+│   ├── Aggregates/AuthSession.cs
+│   ├── ValueObjects/SessionId.cs, DeviceInfo.cs
+│   ├── Events/SessionCreatedEvent.cs, SessionRevokedEvent.cs
+│   ├── Errors/SessionErrors.cs
+│   └── Repositories/IAuthSessionRepository.cs
 │
 ├── Messaging/
-│   ├── IEventBus.cs                   ← Interface de publicação; implementação na Infrastructure
-│   └── IIntegrationEvent.cs           ← Contrato para eventos cross-bounded-context
+│   ├── IEventBus.cs
+│   └── IIntegrationEvent.cs
 │
 └── Shared/
-    ├── Result.cs                      ← Result<T> pattern — sem exceptions no domínio
+    ├── Result.cs                      ← Result<T> pattern
     ├── Error.cs
     ├── ErrorType.cs
-    └── ITenantContext.cs              ← Abstração para TenantId corrente (multitenant)
+    └── ITenantContext.cs
 ```
 
 ## Regras de Implementação
@@ -196,9 +199,9 @@ public abstract class AggregateRoot : BaseEntity { }
 
 ### Value Objects
 
-- Sempre **imutáveis** (`record` ou `sealed class` com construtor privado)
-- Validação dentro do próprio ValueObject via factory method `Create(...)`
-- Retornam `Result<T>` — **nunca lançam exceptions**
+- Sempre **imutáveis** (`sealed class` com construtor privado)
+- Validação via factory method `Create(...)` que retorna `Result<T>`
+- **Nunca lançam exceptions**
 
 ### Result Pattern
 ```csharp
@@ -219,8 +222,10 @@ public class Result
 - `TenantId` — multitenant, cada usuário pertence a um tenant
 - `Email`, `Password` (hash + salt), `TwoFactorSecret` — Value Objects
 - Lockout automático após **5 tentativas falhas consecutivas**
-- Métodos: `Register`, `ChangePassword`, `EnableTwoFactor`, `RecordLoginAttempt`, `Unlock`, `Deactivate`
+- Métodos: `Register`, `Reconstitute`, `ChangePassword`, `EnableTwoFactor`, `RecordLoginAttempt`, `Unlock`, `Deactivate`
 - Cada método retorna `Result` e levanta `DomainEvent`
+- **`Register`** — cria novo usuário (gera novo `UserId`)
+- **`Reconstitute`** — reconstrói usuário a partir do banco (preserva o `UserId` persistido); usado exclusivamente pelos repositórios
 
 ### Multitenancy
 
@@ -248,17 +253,73 @@ public class Result
 - ❌ Implementar `IEventBus` — apenas a interface
 - ❌ Acessar `HttpContext` ou dados de request diretamente
 
-## Convenções de Nomenclatura — Domain
+---
+
+# Application Layer — Avia.SSO.Zeus.Application
+
+## Contexto
+
+Camada de aplicação responsável pelos casos de uso do sistema via **CQRS com MediatR**.
+Orquestra o Domain sem conter regras de negócio.
+
+## Estrutura de Pastas — Application
+```
+Avia.SSO.Zeus.Application/
+├── Common/
+│   ├── Behaviors/
+│   │   └── ValidationBehavior.cs       ← pipeline MediatR que executa FluentValidation
+│   └── DTOs/
+│       ├── AuthTokenDto.cs             ← AccessToken, RefreshToken, ExpiresInMinutes
+│       ├── TenantDto.cs
+│       └── UserDto.cs
+├── DependencyInjection/
+│   └── ApplicationServiceExtensions.cs ← AddApplication()
+├── Identity/
+│   ├── Commands/
+│   │   ├── Register/                   ← RegisterUserCommand + Handler + Validator
+│   │   ├── Login/                      ← LoginCommand + Handler + Validator
+│   │   ├── RefreshToken/               ← RefreshTokenCommand + Handler + Validator
+│   │   ├── ChangePassword/             ← ChangePasswordCommand + Handler + Validator
+│   │   ├── EnableTwoFactor/            ← EnableTwoFactorCommand + Handler + Validator
+│   │   └── VerifyTwoFactor/            ← VerifyTwoFactorCommand + Handler + Validator
+│   └── Queries/
+│       └── GetUser/                    ← GetUserQuery + Handler
+└── Multitenancy/
+    └── Commands/
+        └── CreateTenant/               ← CreateTenantCommand + Handler + Validator
+```
+
+## Packages — Application
+```xml
+<PackageReference Include="MediatR" Version="12.*" />
+<PackageReference Include="FluentValidation" Version="11.*" />
+<PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.*" />
+```
+
+## Registro de Dependências
+```csharp
+// Program.cs
+builder.Services.AddApplication();
+```
+
+## Regras da Application
+
+- Handlers recebem Command/Query e retornam `Result<T>`
+- **Nunca lança exceptions** para fluxos esperados — usa `Result<T>`
+- Validação de entrada via `FluentValidation` (estrutural) — regras de negócio ficam no Domain
+- `ValidationBehavior` executa validadores automaticamente antes de cada handler
+- Não acessa banco de dados diretamente — usa interfaces do Domain
+- Não conhece Infrastructure — depende apenas de Domain
+
+## Convenções — Application
 
 | Artefato | Convenção | Exemplo |
 |---|---|---|
-| Aggregate | PascalCase | `User`, `AuthSession`, `Tenant` |
-| ValueObject | PascalCase | `Email`, `TenantId`, `Password` |
-| DomainEvent | sufixo `Event` | `UserRegisteredEvent` |
-| Errors | sufixo `Errors` | `UserErrors`, `TenantErrors` |
-| Validator | sufixo `Validator` | `PasswordValidator` |
-| Repository Interface | prefixo `I` + sufixo `Repository` | `IUserRepository` |
-| Service Interface | prefixo `I` + sufixo `Service/Hasher` | `IPasswordHasher` |
+| Command | sufixo `Command` | `RegisterUserCommand` |
+| Query | sufixo `Query` | `GetUserQuery` |
+| Handler | sufixo `CommandHandler` / `QueryHandler` | `RegisterUserCommandHandler` |
+| Validator | sufixo `CommandValidator` | `RegisterUserCommandValidator` |
+| DTO | sufixo `Dto` | `UserDto`, `AuthTokenDto` |
 
 ---
 
@@ -266,12 +327,11 @@ public class Result
 
 ## Contexto
 
-A camada de infraestrutura implementa todas as interfaces definidas no Domain e provê:
+Implementa todas as interfaces definidas no Domain e provê:
 - Persistência com **PostgreSQL 16** via **Dapper**
 - Segurança: hash de senha (PBKDF2), TOTP 2FA (Otp.NET), JWT (System.IdentityModel.Tokens.Jwt)
 - Multitenancy via header HTTP `X-Tenant-Id`
 - Event bus (stub in-memory, preparado para MassTransit/RabbitMQ)
-- Registro de dependências via `AddInfrastructure()`
 
 ## Estrutura de Pastas — Infrastructure
 ```
@@ -286,17 +346,17 @@ Avia.SSO.Zeus.Infrastructure/
 │   └── HttpTenantContext.cs                ← lê header X-Tenant-Id
 ├── Persistence/
 │   ├── IDbConnectionFactory.cs
-│   ├── DbConnectionFactory.cs              ← cria NpgsqlConnection
+│   ├── DbConnectionFactory.cs
 │   └── Repositories/
 │       ├── TenantRepository.cs
 │       ├── UserRepository.cs
 │       ├── RefreshTokenRepository.cs
 │       └── AuthSessionRepository.cs
 └── Security/
-    ├── JwtSettings.cs                      ← POCO de configuração
-    ├── PasswordHasher.cs                   ← PBKDF2/SHA-256
+    ├── JwtSettings.cs
+    ├── PasswordHasher.cs                   ← PBKDF2/SHA-256, 100k iterações
     ├── TwoFactorService.cs                 ← TOTP via Otp.NET
-    └── TokenService.cs                     ← JWT access token + refresh token
+    └── TokenService.cs                     ← JWT + refresh token
 ```
 
 ## Packages — Infrastructure
@@ -350,23 +410,122 @@ psql -h localhost -U sso_zeus_user -d sso_zeus -f src/Avia.SSO.Zeus.Infrastructu
 }
 ```
 
-## Registro de Dependências
-```csharp
-// Program.cs
-builder.Services.AddInfrastructure(builder.Configuration);
-```
-
-## Regras da Infrastructure
-
-- Implementa interfaces do Domain — **nunca o contrário**
-- Repositórios usam Dapper com **SQL explícito** — sem LINQ to SQL ou ORM
-- `HttpTenantContext` lê o header `X-Tenant-Id` — obrigatório em todas as requisições multitenant
-- `PasswordHasher` usa PBKDF2 com SHA-256, 100.000 iterações e comparação em tempo constante
-- `InMemoryEventBus` é um stub — substituir por MassTransit quando mensageria for implementada
-
 ## O Que NÃO Fazer na Infrastructure
 
 - ❌ Adicionar lógica de negócio — isso pertence ao Domain
 - ❌ Referenciar diretamente `HttpContext` fora de `HttpTenantContext`
 - ❌ Usar EF Core ou qualquer ORM com migrations automáticas
-- ❌ Lançar `Exception` para fluxos esperados — retornar `Result<T>` ou `null`
+- ❌ Lançar `Exception` para fluxos esperados
+
+---
+
+# Api Layer — Avia.SSO.Zeus.Api
+
+## Endpoints
+
+| Controller | Método | Rota | Descrição |
+|---|---|---|---|
+| `AuthController` | POST | `/api/auth/register` | Registra novo usuário |
+| `AuthController` | POST | `/api/auth/login` | Autentica usuário |
+| `AuthController` | POST | `/api/auth/refresh-token` | Renova access token |
+| `AuthController` | POST | `/api/auth/verify-two-factor` | Verifica código 2FA |
+| `TenantsController` | POST | `/api/tenants` | Cria novo tenant |
+| `UsersController` | GET | `/api/users/{id}` | Retorna usuário por ID |
+| `UsersController` | PUT | `/api/users/{id}/password` | Altera senha |
+| `UsersController` | POST | `/api/users/{id}/two-factor` | Habilita 2FA |
+
+## Headers Obrigatórios
+
+| Header | Endpoints | Descrição |
+|---|---|---|
+| `X-Tenant-Id` | `/api/auth/login`, `/api/auth/register` | GUID do tenant do usuário |
+| `Authorization: Bearer {token}` | `/api/users/*` | JWT de acesso |
+
+## Padrão de Resposta
+
+- **200 OK** — sucesso com body
+- **204 No Content** — sucesso sem body
+- **400 Bad Request** — erro de validação
+- **401 Unauthorized** — credenciais inválidas / token expirado
+- **403 Forbidden** — conta bloqueada
+- **404 Not Found** — recurso não encontrado
+- **409 Conflict** — recurso duplicado
+
+## Packages — Api
+```xml
+<PackageReference Include="Swashbuckle.AspNetCore" Version="6.*" />
+```
+
+## Registro de Dependências — Program.cs
+```csharp
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddApplication();
+builder.Services.AddInfrastructure(builder.Configuration);
+```
+
+## Swagger
+- Disponível em `/swagger` no ambiente Development
+- Suporte a autenticação Bearer JWT configurado no SwaggerGen
+- `JsonStringEnumConverter` registrado globalmente para deserializar enums como strings (ex: `TwoFactorMethod`)
+
+---
+
+# Decisões Técnicas e Correções Aplicadas
+
+## Mapeamento Dapper snake_case → PascalCase
+```csharp
+// InfrastructureServiceExtensions.cs
+DefaultTypeMap.MatchNamesWithUnderscores = true;
+```
+Necessário porque o PostgreSQL usa `snake_case` e as classes C# usam `PascalCase`.
+
+## User.Reconstitute vs User.Register
+- `User.Register(...)` — cria novo usuário, gera novo `UserId` com `UserId.New()`
+- `User.Reconstitute(...)` — reconstrói a partir do banco, preserva o `UserId` existente
+- `UserRepository.UserRow.ToDomain()` **sempre** chama `Reconstitute`, nunca `Register`
+
+## RefreshToken.UserId
+- `RefreshToken` armazena `UserId` (FK para `users.id`)
+- `RefreshToken.Create(Guid userId, string token, DateTime expiresAt)`
+- `RefreshTokenCommandHandler` usa `refreshToken.UserId` para buscar o usuário associado
+
+## TenantId no Login
+- `LoginCommand.TenantId` pode vir do corpo JSON **ou** do header `X-Tenant-Id`
+- `AuthController.Login` extrai o header `X-Tenant-Id` e sobrescreve o campo do command
+
+## JsonStringEnumConverter
+- Registrado globalmente em `Program.cs` via `AddJsonOptions`
+- Necessário para deserializar `TwoFactorMethod` ("Totp", "Sms", "None") a partir do JSON
+
+---
+
+# Tests — Avia.SSO.Zeus.Tests
+
+## Cobertura Atual — 59 testes
+
+| Área | Arquivo | Testes |
+|---|---|---|
+| Domain/Shared | `ResultTests` | 4 |
+| Domain/Identity/ValueObjects | `EmailTests`, `PasswordTests`, `UserIdTests` | 13 |
+| Domain/Identity/Aggregates | `UserTests` | 11 |
+| Domain/Identity/Entities | `RefreshTokenTests` | 3 |
+| Domain/Multitenancy | `TenantTests` | 6 |
+| Domain/Session | `AuthSessionTests` | 4 |
+| Infrastructure/Security | `PasswordHasherTests` | 5 |
+| Application/Identity | `RegisterUserCommandHandlerTests`, `LoginCommandHandlerTests` | 8 |
+| Application/Multitenancy | `CreateTenantCommandHandlerTests` | 3 |
+
+## Packages — Tests
+```xml
+<PackageReference Include="MSTest" Version="4.*" />
+<PackageReference Include="Moq" Version="4.*" />
+```
+    
+## Convenções de Teste
+
+- Nomenclatura: `MethodName_Scenario_ExpectedResult`
+- Mocks via **Moq** para dependências externas (repositórios, serviços)
+- Testes de domínio sem mocks — instanciar agregados diretamente
+- Testes de handler isolam apenas as dependências da camada Application
