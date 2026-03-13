@@ -423,16 +423,16 @@ psql -h localhost -U sso_zeus_user -d sso_zeus -f src/Avia.SSO.Zeus.Infrastructu
 
 ## Endpoints
 
-| Controller | Método | Rota | Descrição |
-|---|---|---|---|
-| `AuthController` | POST | `/api/auth/register` | Registra novo usuário |
-| `AuthController` | POST | `/api/auth/login` | Autentica usuário |
-| `AuthController` | POST | `/api/auth/refresh-token` | Renova access token |
-| `AuthController` | POST | `/api/auth/verify-two-factor` | Verifica código 2FA |
-| `TenantsController` | POST | `/api/tenants` | Cria novo tenant |
-| `UsersController` | GET | `/api/users/{id}` | Retorna usuário por ID |
-| `UsersController` | PUT | `/api/users/{id}/password` | Altera senha |
-| `UsersController` | POST | `/api/users/{id}/two-factor` | Habilita 2FA |
+| Controller | Método | Rota | Acesso | Descrição |
+|---|---|---|---|---|
+| `AuthController` | POST | `/api/auth/register` | Público | Registra novo usuário |
+| `AuthController` | POST | `/api/auth/login` | Público | Autentica usuário |
+| `AuthController` | POST | `/api/auth/refresh-token` | Público | Renova access token |
+| `AuthController` | POST | `/api/auth/verify-two-factor` | Público | Verifica código 2FA |
+| `TenantsController` | POST | `/api/tenants` | `[Authorize]` | Cria novo tenant |
+| `UsersController` | GET | `/api/users/{id}` | `[Authorize]` | Retorna usuário por ID |
+| `UsersController` | PUT | `/api/users/{id}/password` | `[Authorize]` | Altera senha |
+| `UsersController` | POST | `/api/users/{id}/two-factor` | `[Authorize]` | Habilita 2FA — retorna secret TOTP |
 
 ## Headers Obrigatórios
 
@@ -454,6 +454,7 @@ psql -h localhost -U sso_zeus_user -d sso_zeus -f src/Avia.SSO.Zeus.Infrastructu
 ## Packages — Api
 ```xml
 <PackageReference Include="Swashbuckle.AspNetCore" Version="6.*" />
+<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.*" />
 ```
 
 ## Registro de Dependências — Program.cs
@@ -463,12 +464,50 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+
+// JWT Authentication
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = ...,
+            ValidAudience = ...,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+        };
+    });
+builder.Services.AddAuthorization();
+
+// Middleware pipeline
+app.UseAuthentication();  // antes de UseAuthorization
+app.UseAuthorization();
 ```
+
+## Autorização
+- `AuthController` — `[AllowAnonymous]` em toda a controller (rotas públicas)
+- `UsersController` — `[Authorize]` em toda a controller (JWT obrigatório)
+- `TenantsController` — `[Authorize]` em toda a controller (JWT obrigatório)
+- Token inválido, expirado ou ausente → **401 Unauthorized**
 
 ## Swagger
 - Disponível em `/swagger` no ambiente Development
 - Suporte a autenticação Bearer JWT configurado no SwaggerGen
 - `JsonStringEnumConverter` registrado globalmente para deserializar enums como strings (ex: `TwoFactorMethod`)
+
+## Exception Handler Global
+```csharp
+app.UseExceptionHandler(errApp => errApp.Run(async ctx =>
+{
+    // ValidationException → 400 com lista de erros
+    // Outras exceptions → 500
+}));
+```
+Captura `FluentValidation.ValidationException` lançada pelo `ValidationBehavior` e retorna 400 com detalhes dos campos inválidos.
 
 ---
 
@@ -498,6 +537,17 @@ Necessário porque o PostgreSQL usa `snake_case` e as classes C# usam `PascalCas
 ## JsonStringEnumConverter
 - Registrado globalmente em `Program.cs` via `AddJsonOptions`
 - Necessário para deserializar `TwoFactorMethod` ("Totp", "Sms", "None") a partir do JSON
+
+## Autenticação JWT (JwtBearer)
+- Package: `Microsoft.AspNetCore.Authentication.JwtBearer` versão `8.*`
+- A mesma `SecretKey` da seção `Jwt` do `appsettings.json` é usada para **gerar** (TokenService) e **validar** (JwtBearer middleware) os tokens
+- `UseAuthentication()` deve vir **antes** de `UseAuthorization()` no pipeline
+- Rotas públicas usam `[AllowAnonymous]`; rotas protegidas usam `[Authorize]`
+
+## EnableTwoFactor retorna o secret TOTP
+- `POST /api/users/{id}/two-factor` retorna HTTP 200 com o secret Base32 em texto
+- O cliente deve exibir o secret (ou QR Code) para o usuário configurar no app autenticador (Google Authenticator, Authy, etc.)
+- Após configurar, o usuário usa `POST /api/auth/verify-two-factor` com o código TOTP
 
 ---
 

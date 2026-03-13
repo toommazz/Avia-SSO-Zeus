@@ -1,9 +1,11 @@
 using Avia.SSO.Zeus.Application.Multitenancy.Commands.CreateTenant;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Avia.SSO.Zeus.Api.Controllers;
 
+[Authorize]
 [Route("api/[controller]")]
 public sealed class TenantsController(IMediator mediator) : ApiController
 {

@@ -3,10 +3,12 @@ using Avia.SSO.Zeus.Application.Identity.Commands.RefreshToken;
 using Avia.SSO.Zeus.Application.Identity.Commands.Register;
 using Avia.SSO.Zeus.Application.Identity.Commands.VerifyTwoFactor;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Avia.SSO.Zeus.Api.Controllers;
 
+[AllowAnonymous]
 [Route("api/[controller]")]
 public sealed class AuthController(IMediator mediator) : ApiController
 {

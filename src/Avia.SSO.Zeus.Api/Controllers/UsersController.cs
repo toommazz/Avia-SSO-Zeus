@@ -2,10 +2,12 @@ using Avia.SSO.Zeus.Application.Identity.Commands.ChangePassword;
 using Avia.SSO.Zeus.Application.Identity.Commands.EnableTwoFactor;
 using Avia.SSO.Zeus.Application.Identity.Queries.GetUser;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Avia.SSO.Zeus.Api.Controllers;
 
+[Authorize]
 [Route("api/[controller]")]
 public sealed class UsersController(IMediator mediator) : ApiController
 {
