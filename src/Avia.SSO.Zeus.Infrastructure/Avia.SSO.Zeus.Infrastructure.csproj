@@ -1,4 +1,15 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.*" />
+    <PackageReference Include="Npgsql" Version="9.*" />
+    <PackageReference Include="Otp.NET" Version="1.*" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.*" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Avia.SSO.Zeus.Domain\Avia.SSO.Zeus.Domain.csproj" />

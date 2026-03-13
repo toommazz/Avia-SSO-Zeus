@@ -4,6 +4,7 @@
 - .NET 10
 - C#
 - VSCode
+- PostgreSQL 16 + Dapper
 
 ## Estrutura
 ```
@@ -24,10 +25,20 @@ sso-zeus-ai/
 │   │   ├── Class1.cs
 │   │   └── Avia.SSO.Zeus.Application.csproj
 │   ├── Avia.SSO.Zeus.Domain/
-│   │   ├── Class1.cs
+│   │   ├── Common/
+│   │   ├── Identity/
+│   │   ├── Messaging/
+│   │   ├── Multitenancy/
+│   │   ├── Session/
+│   │   ├── Shared/
 │   │   └── Avia.SSO.Zeus.Domain.csproj
 │   └── Avia.SSO.Zeus.Infrastructure/
-│       ├── Class1.cs
+│       ├── DependencyInjection/
+│       ├── Messaging/
+│       ├── Migrations/
+│       ├── Multitenancy/
+│       ├── Persistence/
+│       ├── Security/
 │       └── Avia.SSO.Zeus.Infrastructure.csproj
 └── tests/
     └── Avia.SSO.Zeus.Tests/
@@ -171,7 +182,6 @@ Avia.SSO.Zeus.Domain/
 
 ### BaseEntity e AggregateRoot
 ```csharp
-// Common/BaseEntity.cs
 public abstract class BaseEntity
 {
     public Guid Id { get; protected set; }
@@ -181,7 +191,6 @@ public abstract class BaseEntity
     public void ClearDomainEvents() => _domainEvents.Clear();
 }
 
-// Common/AggregateRoot.cs
 public abstract class AggregateRoot : BaseEntity { }
 ```
 
@@ -190,172 +199,45 @@ public abstract class AggregateRoot : BaseEntity { }
 - Sempre **imutáveis** (`record` ou `sealed class` com construtor privado)
 - Validação dentro do próprio ValueObject via factory method `Create(...)`
 - Retornam `Result<T>` — **nunca lançam exceptions**
-```csharp
-public sealed class Email : ValueObject
-{
-    public string Value { get; }
-    private Email(string value) => Value = value;
-
-    public static Result<Email> Create(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return Result.Failure<Email>(UserErrors.Email.Empty);
-        if (!value.Contains('@'))
-            return Result.Failure<Email>(UserErrors.Email.InvalidFormat);
-        return Result.Success(new Email(value.ToLowerInvariant().Trim()));
-    }
-
-    protected override IEnumerable<object> GetEqualityComponents()
-    {
-        yield return Value;
-    }
-}
-```
 
 ### Result Pattern
 ```csharp
-// Shared/Result.cs
 public class Result
 {
     public bool IsSuccess { get; }
     public bool IsFailure => !IsSuccess;
     public Error Error { get; }
-
-    protected Result(bool isSuccess, Error error) { ... }
-
     public static Result Success() => new(true, Error.None);
     public static Result Failure(Error error) => new(false, error);
     public static Result<T> Success<T>(T value) => new(value, true, Error.None);
     public static Result<T> Failure<T>(Error error) => new(default!, false, error);
 }
-
-public class Result<T> : Result
-{
-    public T Value { get; }
-    protected internal Result(T value, bool isSuccess, Error error)
-        : base(isSuccess, error) => Value = value;
-}
-```
-
-### Errors (tipados por contexto)
-```csharp
-// Identity/Errors/UserErrors.cs
-public static class UserErrors
-{
-    public static class Email
-    {
-        public static readonly Error Empty =
-            new("User.Email.Empty", "Email cannot be empty.", ErrorType.Validation);
-        public static readonly Error InvalidFormat =
-            new("User.Email.InvalidFormat", "Invalid email format.", ErrorType.Validation);
-        public static readonly Error AlreadyInUse =
-            new("User.Email.AlreadyInUse", "Email already in use.", ErrorType.Conflict);
-    }
-
-    public static class Password
-    {
-        public static readonly Error TooShort =
-            new("User.Password.TooShort", "Password must be at least 8 characters.", ErrorType.Validation);
-        public static readonly Error NoUpperCase =
-            new("User.Password.NoUpperCase", "Password must contain at least one uppercase letter.", ErrorType.Validation);
-        public static readonly Error NoSpecialChar =
-            new("User.Password.NoSpecialChar", "Password must contain at least one special character.", ErrorType.Validation);
-    }
-
-    public static readonly Error NotFound =
-        new("User.NotFound", "User not found.", ErrorType.NotFound);
-    public static readonly Error LockedOut =
-        new("User.LockedOut", "Account locked due to too many failed attempts.", ErrorType.Forbidden);
-    public static readonly Error InvalidCredentials =
-        new("User.InvalidCredentials", "Invalid credentials.", ErrorType.Unauthorized);
-    public static readonly Error TwoFactorRequired =
-        new("User.TwoFactorRequired", "Two-factor authentication required.", ErrorType.Unauthorized);
-    public static readonly Error TwoFactorInvalid =
-        new("User.TwoFactorInvalid", "Invalid or expired 2FA code.", ErrorType.Unauthorized);
-}
-```
-
-### Validators (FluentValidation)
-
-Usado apenas para validações **estruturais e reutilizáveis**.
-Validações de **regras de negócio** (unicidade, lockout) ficam no Aggregate via `Result`.
-```csharp
-// Identity/Validators/PasswordValidator.cs
-public class PasswordValidator : AbstractValidator<string>
-{
-    public PasswordValidator()
-    {
-        RuleFor(p => p)
-            .NotEmpty().WithErrorCode(UserErrors.Password.TooShort.Code)
-            .MinimumLength(8).WithErrorCode(UserErrors.Password.TooShort.Code)
-            .Matches("[A-Z]").WithErrorCode(UserErrors.Password.NoUpperCase.Code)
-            .Matches("[^a-zA-Z0-9]").WithErrorCode(UserErrors.Password.NoSpecialChar.Code);
-    }
-}
 ```
 
 ### Aggregate User
 
-O agregado `User` encapsula:
 - `TenantId` — multitenant, cada usuário pertence a um tenant
-- `Email` (ValueObject)
-- `Password` — hash + salt como ValueObject, **nunca string pura**
-- `TwoFactorSecret` (ValueObject opcional)
-- `LoginAttempts` — lista de `LoginAttempt`
-- `Status` — enum `UserStatus`: Active, Locked, Deactivated
+- `Email`, `Password` (hash + salt), `TwoFactorSecret` — Value Objects
 - Lockout automático após **5 tentativas falhas consecutivas**
-- Métodos: `Register`, `ChangePassword`, `EnableTwoFactor`, `VerifyTwoFactor`,
-  `RecordLoginAttempt`, `Unlock`, `Deactivate`
+- Métodos: `Register`, `ChangePassword`, `EnableTwoFactor`, `RecordLoginAttempt`, `Unlock`, `Deactivate`
 - Cada método retorna `Result` e levanta `DomainEvent`
 
 ### Multitenancy
 
-- `ITenantContext` expõe o `TenantId` corrente (implementado na Infrastructure via HttpContext/header)
-- Todo Aggregate com escopo de tenant recebe `TenantId` no construtor
-- **Nunca filtre por tenant na camada de domínio** — responsabilidade dos repositórios (Infrastructure)
+- `ITenantContext` expõe o `TenantId` corrente (implementado na Infrastructure via header HTTP)
+- **Nunca filtre por tenant na camada de domínio** — responsabilidade dos repositórios
 
-### Domain Events
-```csharp
-// Common/DomainEvent.cs
-public abstract record DomainEvent(Guid Id, DateTime OccurredAt)
-{
-    protected DomainEvent() : this(Guid.NewGuid(), DateTime.UtcNow) { }
-}
-
-// Exemplo
-public sealed record UserRegisteredEvent(
-    Guid UserId,
-    Guid TenantId,
-    string Email) : DomainEvent;
-```
-
-### Separação de Eventos — Domain vs Integration
+### Separação de Eventos
 
 | Tipo | Localização | Finalidade |
 |---|---|---|
 | `DomainEvent` | `Domain/Common` | Consistência interna do bounded context |
-| `IIntegrationEvent` | `Domain/Messaging` | Publicado para outros serviços via broker (RabbitMQ/MassTransit) |
-
-`IEventBus` fica no domínio como interface. Implementação fica na Infrastructure.
-
-### Repositórios — somente interfaces no Domain
-```csharp
-public interface IUserRepository
-{
-    Task<User?> GetByIdAsync(UserId id, CancellationToken ct = default);
-    Task<User?> GetByEmailAndTenantAsync(Email email, TenantId tenantId, CancellationToken ct = default);
-    Task<bool> EmailExistsInTenantAsync(Email email, TenantId tenantId, CancellationToken ct = default);
-    Task AddAsync(User user, CancellationToken ct = default);
-    Task UpdateAsync(User user, CancellationToken ct = default);
-}
-```
+| `IIntegrationEvent` | `Domain/Messaging` | Publicado para outros serviços via broker |
 
 ## Package Permitido no Domain
 ```xml
 <PackageReference Include="FluentValidation" Version="11.*" />
 ```
-
-Nenhum outro package externo. O domínio deve ser autocontido.
 
 ## O Que NÃO Fazer no Domain
 
@@ -365,17 +247,6 @@ Nenhum outro package externo. O domínio deve ser autocontido.
 - ❌ Colocar Commands/Queries/Handlers — isso é Application Layer
 - ❌ Implementar `IEventBus` — apenas a interface
 - ❌ Acessar `HttpContext` ou dados de request diretamente
-
-## Ordem de Criação dos Arquivos
-
-Siga esta ordem para evitar dependências circulares:
-
-1. `Shared/` → Result, Error, ErrorType, ITenantContext
-2. `Common/` → BaseEntity, AggregateRoot, ValueObject, DomainEvent
-3. `Multitenancy/` → ValueObjects → Entities → Events → Errors → Validators → Repositories
-4. `Identity/` → ValueObjects → Aggregates → Entities → Enums → Events → Errors → Validators → Repositories → Services
-5. `Session/` → ValueObjects → Aggregates → Events → Errors → Repositories
-6. `Messaging/` → IEventBus, IIntegrationEvent
 
 ## Convenções de Nomenclatura — Domain
 
@@ -388,3 +259,114 @@ Siga esta ordem para evitar dependências circulares:
 | Validator | sufixo `Validator` | `PasswordValidator` |
 | Repository Interface | prefixo `I` + sufixo `Repository` | `IUserRepository` |
 | Service Interface | prefixo `I` + sufixo `Service/Hasher` | `IPasswordHasher` |
+
+---
+
+# Infrastructure Layer — Avia.SSO.Zeus.Infrastructure
+
+## Contexto
+
+A camada de infraestrutura implementa todas as interfaces definidas no Domain e provê:
+- Persistência com **PostgreSQL 16** via **Dapper**
+- Segurança: hash de senha (PBKDF2), TOTP 2FA (Otp.NET), JWT (System.IdentityModel.Tokens.Jwt)
+- Multitenancy via header HTTP `X-Tenant-Id`
+- Event bus (stub in-memory, preparado para MassTransit/RabbitMQ)
+- Registro de dependências via `AddInfrastructure()`
+
+## Estrutura de Pastas — Infrastructure
+```
+Avia.SSO.Zeus.Infrastructure/
+├── DependencyInjection/
+│   └── InfrastructureServiceExtensions.cs  ← AddInfrastructure()
+├── Messaging/
+│   └── InMemoryEventBus.cs                 ← stub; trocar por MassTransit futuramente
+├── Migrations/
+│   └── schema.sql                          ← DDL PostgreSQL
+├── Multitenancy/
+│   └── HttpTenantContext.cs                ← lê header X-Tenant-Id
+├── Persistence/
+│   ├── IDbConnectionFactory.cs
+│   ├── DbConnectionFactory.cs              ← cria NpgsqlConnection
+│   └── Repositories/
+│       ├── TenantRepository.cs
+│       ├── UserRepository.cs
+│       ├── RefreshTokenRepository.cs
+│       └── AuthSessionRepository.cs
+└── Security/
+    ├── JwtSettings.cs                      ← POCO de configuração
+    ├── PasswordHasher.cs                   ← PBKDF2/SHA-256
+    ├── TwoFactorService.cs                 ← TOTP via Otp.NET
+    └── TokenService.cs                     ← JWT access token + refresh token
+```
+
+## Packages — Infrastructure
+```xml
+<FrameworkReference Include="Microsoft.AspNetCore.App" />
+<PackageReference Include="Dapper" Version="2.*" />
+<PackageReference Include="Npgsql" Version="9.*" />
+<PackageReference Include="Otp.NET" Version="1.*" />
+<PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.*" />
+```
+
+## Banco de Dados — PostgreSQL
+
+### Configuração Local
+| Item | Valor |
+|---|---|
+| Host | `localhost` |
+| Port | `5432` |
+| Database | `sso_zeus` |
+| Username | `sso_zeus_user` |
+| Password | `sso_zeus_pass` |
+
+### Connection String
+```json
+"ConnectionStrings": {
+  "Postgres": "Host=localhost;Port=5432;Database=sso_zeus;Username=sso_zeus_user;Password=sso_zeus_pass"
+}
+```
+
+### Tabelas
+| Tabela | Descrição |
+|---|---|
+| `tenants` | Tenants do sistema |
+| `users` | Usuários por tenant |
+| `login_attempts` | Histórico de tentativas de login |
+| `refresh_tokens` | Tokens de refresh JWT |
+| `auth_sessions` | Sessões autenticadas |
+
+### Executar Migration
+```bash
+psql -h localhost -U sso_zeus_user -d sso_zeus -f src/Avia.SSO.Zeus.Infrastructure/Migrations/schema.sql
+```
+
+## Configuração JWT — appsettings
+```json
+"Jwt": {
+  "SecretKey": "CHANGE_ME_USE_A_STRONG_SECRET_KEY_IN_PRODUCTION",
+  "Issuer": "Avia.SSO.Zeus",
+  "Audience": "Avia.SSO.Zeus.Clients",
+  "ExpirationMinutes": 60
+}
+```
+
+## Registro de Dependências
+```csharp
+// Program.cs
+builder.Services.AddInfrastructure(builder.Configuration);
+```
+
+## Regras da Infrastructure
+
+- Implementa interfaces do Domain — **nunca o contrário**
+- Repositórios usam Dapper com **SQL explícito** — sem LINQ to SQL ou ORM
+- `HttpTenantContext` lê o header `X-Tenant-Id` — obrigatório em todas as requisições multitenant
+- `PasswordHasher` usa PBKDF2 com SHA-256, 100.000 iterações e comparação em tempo constante
+- `InMemoryEventBus` é um stub — substituir por MassTransit quando mensageria for implementada
+
+## O Que NÃO Fazer na Infrastructure
+
+- ❌ Adicionar lógica de negócio — isso pertence ao Domain
+- ❌ Referenciar diretamente `HttpContext` fora de `HttpTenantContext`
+- ❌ Usar EF Core ou qualquer ORM com migrations automáticas
+- ❌ Lançar `Exception` para fluxos esperados — retornar `Result<T>` ou `null`
