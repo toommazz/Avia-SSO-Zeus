@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Avia.SSO.Zeus.Api/Avia.SSO.Zeus.Api.csproj" />
+    <Project Path="src/Avia.SSO.Zeus.Application/Avia.SSO.Zeus.Application.csproj" />
+    <Project Path="src/Avia.SSO.Zeus.Domain/Avia.SSO.Zeus.Domain.csproj" />
+    <Project Path="src/Avia.SSO.Zeus.Infrastructure/Avia.SSO.Zeus.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Avia.SSO.Zeus.Tests/Avia.SSO.Zeus.Tests.csproj" />
+  </Folder>
+</Solution>
